@@ -1,0 +1,41 @@
+# Next.js
+.next/
+out/
+build/
+*.swp
+*.swo
+*~
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+
+# Production
+.env.production
+.env.production.local
+
+# Misc
+.DS_Store
+*.log
+*.logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# OS
+.AppleDouble
+.LSOverride
+Thumbs.db
