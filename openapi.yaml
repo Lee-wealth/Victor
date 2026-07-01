@@ -1,0 +1,587 @@
+openapi: 3.1.0
+info:
+  title: Navil Job Connect API
+  version: 1.0.0
+  description: |
+    OpenAPI 3.1 specification for Navil Job Connect — a recruitment platform connecting job seekers and employers.
+    This spec follows Node.js (NestJS/Express) conventions and includes Paystack integration, localization/currency support,
+    file upload flows (multipart + presigned S3), and AI endpoints.
+servers:
+  - url: https://api.naviljobconnect.com
+    description: Production server
+  - url: https://staging.api.naviljobconnect.com
+    description: Staging server
+  - url: http://localhost:3000
+    description: Local development
+paths:
+  /api/v1/auth/register:
+    post:
+      summary: Register a new user (seeker or employer)
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Created — verification required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/v1/auth/login:
+    post:
+      summary: Login with email/phone + password
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Auth tokens
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokens'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/auth/refresh:
+    post:
+      summary: Refresh access token using refresh token
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: New tokens
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokens'
+  /api/v1/seeker/me:
+    get:
+      summary: Get current job seeker profile
+      tags: [Seeker]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Seeker profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SeekerProfile'
+  /api/v1/seeker/me:
+    put:
+      summary: Update job seeker profile
+      tags: [Seeker]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SeekerProfileUpdate'
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SeekerProfile'
+  /api/v1/seeker/resume:
+    post:
+      summary: Upload resume (multipart) or request presigned URL flow
+      tags: [Seeker]
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Resume uploaded and parsed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  resume_id:
+                    type: string
+                  parsed_json:
+                    type: object
+  /api/v1/jobs:
+    get:
+      summary: Search and list jobs (public)
+      tags: [Jobs]
+      parameters:
+        - in: query
+          name: query
+          schema:
+            type: string
+          description: Keyword search
+        - in: query
+          name: location
+          schema:
+            type: string
+        - in: query
+          name: employment_type
+          schema:
+            type: string
+        - in: query
+          name: remote
+          schema:
+            type: boolean
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            default: 20
+        - in: header
+          name: Accept-Language
+          schema:
+            type: string
+          description: Preferred language for localized content
+        - in: header
+          name: X-Currency
+          schema:
+            type: string
+            example: NGN
+          description: Preferred currency code for price display
+      responses:
+        '200':
+          description: Paged job results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedJobs'
+  /api/v1/jobs/{jobId}:
+    get:
+      summary: Get job details
+      tags: [Jobs]
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+  /api/v1/employer/{employerId}/jobs:
+    post:
+      summary: Create a job posting (employer)
+      tags: [Employer]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: employerId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobCreate'
+      responses:
+        '201':
+          description: Job created (may be pending approval)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+  /api/v1/jobs/{jobId}/apply:
+    post:
+      summary: Apply to a job
+      tags: [Applications]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationCreate'
+      responses:
+        '201':
+          description: Application created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+  /api/v1/jobs/{jobId}/save:
+    post:
+      summary: Save job to seeker saved list
+      tags: [Jobs]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  saved: { type: boolean }
+  /api/v1/search/jobs:
+    post:
+      summary: Advanced search (body filters)
+      tags: [Search]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filters:
+                  type: object
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedJobs'
+  /api/v1/match/{seekerId}:
+    get:
+      summary: Get top matches for a seeker (requires auth or admin)
+      tags: [Matching]
+      parameters:
+        - in: path
+          name: seekerId
+          required: true
+          schema:
+            type: string
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Matched jobs with scores
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/JobMatch'
+  /api/v1/ai/cv-review:
+    post:
+      summary: AI CV review and optimization
+      tags: [AI]
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                resume_text:
+                  type: string
+                resume_id:
+                  type: string
+      responses:
+        '200':
+          description: CV suggestions and optimized output
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  score: { type: number }
+                  suggestions: { type: array, items: { type: string } }
+                  optimized_resume: { type: string }
+  /api/v1/ai/interview-practice:
+    post:
+      summary: AI interview practice session (question generation + scoring)
+      tags: [AI]
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                job_id: { type: string }
+                seeker_id: { type: string }
+      responses:
+        '200':
+          description: Interview Q&A
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  questions: { type: array, items: { type: object } }
+  /api/v1/webhooks/paystack:
+    post:
+      summary: Paystack webhook receiver — verify using X-Paystack-Signature
+      tags: [Webhooks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Webhook received
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    oauth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.naviljobconnect.com/oauth/authorize
+          tokenUrl: https://auth.naviljobconnect.com/oauth/token
+          scopes: {}
+  schemas:
+    Error:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    RegisterRequest:
+      type: object
+      required: [email, password, role]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+          enum: [seeker, employer]
+    AuthTokens:
+      type: object
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          example: Bearer
+        expires_in:
+          type: integer
+        refresh_token:
+          type: string
+    SeekerProfile:
+      type: object
+      properties:
+        id: { type: string }
+        user_id: { type: string }
+        headline: { type: string }
+        summary: { type: string }
+        skills:
+          type: array
+          items: { type: string }
+        experience_years: { type: integer }
+        location:
+          type: object
+          properties:
+            city: { type: string }
+            state: { type: string }
+            country: { type: string }
+        resume_s3_url: { type: string }
+    SeekerProfileUpdate:
+      type: object
+      properties:
+        headline: { type: string }
+        summary: { type: string }
+        skills:
+          type: array
+          items: { type: string }
+        location:
+          $ref: '#/components/schemas/Location'
+    Location:
+      type: object
+      properties:
+        city: { type: string }
+        state: { type: string }
+        country: { type: string }
+    Job:
+      type: object
+      properties:
+        id: { type: string }
+        employer_id: { type: string }
+        title: { type: string }
+        description: { type: string }
+        responsibilities:
+          type: array
+          items: { type: string }
+        qualifications:
+          type: array
+          items: { type: string }
+        location:
+          $ref: '#/components/schemas/Location'
+        remote: { type: boolean }
+        min_salary: { type: number }
+        max_salary: { type: number }
+        currency: { type: string }
+        price_display:
+          $ref: '#/components/schemas/CurrencyAmount'
+        employment_type:
+          type: string
+          enum: [full_time, part_time, contract, internship]
+        is_featured: { type: boolean }
+        status:
+          type: string
+          enum: [draft, published, closed, flagged]
+        created_at: { type: string, format: date-time }
+    JobCreate:
+      type: object
+      required: [title, description]
+      properties:
+        title: { type: string }
+        description: { type: string }
+        responsibilities:
+          type: array
+          items: { type: string }
+        qualifications:
+          type: array
+          items: { type: string }
+        location:
+          $ref: '#/components/schemas/Location'
+        remote: { type: boolean }
+        min_salary: { type: number }
+        max_salary: { type: number }
+        currency: { type: string }
+        employment_type:
+          type: string
+          enum: [full_time, part_time, contract, internship]
+    ApplicationCreate:
+      type: object
+      properties:
+        resume_id: { type: string }
+        cover_letter: { type: string }
+    Application:
+      type: object
+      properties:
+        id: { type: string }
+        job_id: { type: string }
+        seeker_id: { type: string }
+        status:
+          type: string
+          enum: [applied, viewed, shortlisted, interviewed, offered, rejected, withdrawn]
+        applied_at: { type: string, format: date-time }
+    PagedJobs:
+      type: object
+      properties:
+        total: { type: integer }
+        page: { type: integer }
+        per_page: { type: integer }
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Job'
+    JobMatch:
+      type: object
+      properties:
+        job:
+          $ref: '#/components/schemas/Job'
+        score: { type: number }
+    CurrencyAmount:
+      type: object
+      properties:
+        base_amount: { type: number }
+        base_currency: { type: string }
+        localized_amount: { type: number }
+        localized_currency: { type: string }
+        localized_display: { type: string }
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+tags:
+  - name: Auth
+  - name: Seeker
+  - name: Jobs
+  - name: Employer
+  - name: Applications
+  - name: Search
+  - name: Matching
+  - name: AI
+  - name: Webhooks
+
+x-notes:
+  currency_localization: |
+    Price objects include both a base_amount/base_currency and a localized_amount/localized_currency with a localized_display string for UI.
+    The API accepts the X-Currency header and Accept-Language for localized responses. If not provided, the server will infer locale via IP geolocation or user preference.
+  paystack_integration: |
+    Webhooks from Paystack should be validated using the X-Paystack-Signature header and the PAYSTACK_WEBHOOK_SECRET value. Ensure idempotency when processing webhooks.
