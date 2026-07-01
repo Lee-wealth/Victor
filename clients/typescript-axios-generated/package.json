@@ -1,0 +1,21 @@
+{
+  "name": "@navil/job-connect-client",
+  "version": "1.0.0",
+  "description": "TypeScript Axios client for Navil Job Connect API",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "axios": "^1.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.1.0",
+    "@types/node": "^20.0.0"
+  },
+  "keywords": ["navil", "recruitment", "job", "api", "client"],
+  "author": "Navil Job Connect",
+  "license": "MIT"
+}
